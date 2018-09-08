@@ -133,16 +133,12 @@
 // Define the version number, also used for webserver as Last-Modified header:
 #define VERSION "Wed, 18 Apr 2018 10:42:00 GMT"
 // TFT.  Define USETFT if required.
-#define USETFT
+//#define USETFT
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncMqttClient.h>
 #include <SPI.h>
-#if defined ( USETFT )
-#include <Adafruit_GFX.h>
-#include <TFT_ILI9163C.h>
-#endif
 #include <Ticker.h>
 #include <stdio.h>
 #include <string.h>
@@ -204,8 +200,6 @@ extern "C"
 //******************************************************************************************
 // Forward declaration of various functions                                                *
 //******************************************************************************************
-void   displayinfo ( const char* str, uint16_t pos, uint16_t height, uint16_t color ) ;
-void   showstreamtitle ( const char* ml, bool full = false ) ;
 void   handlebyte ( uint8_t b, bool force = false ) ;
 void   handlebyte_ch ( uint8_t b, bool force = false ) ;
 void   handleFS ( AsyncWebServerRequest* request ) ;
@@ -264,9 +258,6 @@ AsyncWebServer   cmdserver ( 80 ) ;                        // Instance of embedd
 AsyncMqttClient  mqttclient ;                              // Client for MQTT subscriber
 IPAddress        mqtt_server_IP ;                          // IP address of MQTT broker
 char             cmd[130] ;                                // Command from MQTT or Serial
-#if defined ( USETFT )
-TFT_ILI9163C     tft = TFT_ILI9163C ( TFT_CS, TFT_DC ) ;
-#endif
 Ticker           tckr ;                                    // For timing 100 msec
 TinyXML          xml;                                      // For XML parser.
 uint32_t         totalcount = 0 ;                          // Counter mp3 data
@@ -846,11 +837,11 @@ char* dbgprint ( const char* format, ... )
   va_start ( varArgs, format ) ;                       // Prepare parameters
   vsnprintf ( sbuf, sizeof(sbuf), format, varArgs ) ;  // Format the message
   va_end ( varArgs ) ;                                 // End of using parameters
-  if ( DEBUG )                                         // DEBUG on?
+  /*if ( DEBUG )                                         // DEBUG on?
   {
     Serial.print ( "D: " ) ;                           // Yes, print prefix
     Serial.println ( sbuf ) ;                          // and the info
-  }
+  }*/
   return sbuf ;                                        // Return stored string
 }
 
@@ -995,36 +986,6 @@ void timer10sec()
 
 
 //******************************************************************************************
-//                                  A N A G E T S W                                        *
-//******************************************************************************************
-// Translate analog input to switch number.  0 is inactive.                                *
-// Note that it is adviced to avoid expressions as the argument for the abs function.      *
-//******************************************************************************************
-uint8_t anagetsw ( uint16_t v )
-{
-  int      i ;                                    // Loop control
-  int      oldmindist = 1000 ;                    // Detection least difference
-  int      newdist ;                              // New found difference
-  uint8_t  sw = 0 ;                               // Number of switch detected (0 or 1..3)
-
-  if ( v > analogrest )                           // Inactive level?
-  {
-    for ( i = 0 ; i < NUMANA ; i++ )
-    {
-      newdist = analogsw[i] - v ;                  // Compute difference
-      newdist = abs ( newdist ) ;                  // Make it absolute
-      if ( newdist < oldmindist )                  // New least difference?
-      {
-        oldmindist = newdist ;                     // Yes, remember
-        sw = i + 1 ;                               // Remember switch
-      }
-    }
-  }
-  return sw ;                                      // Return active switch
-}
-
-
-//******************************************************************************************
 //                               T E S T F I L E                                           *
 //******************************************************************************************
 // Test the performance of SPIFFS read.                                                    *
@@ -1079,192 +1040,6 @@ void testfile ( String fspec )
 
 
 //******************************************************************************************
-//                                  T I M E R 1 0 0                                        *
-//******************************************************************************************
-// Examine button every 100 msec.                                                          *
-//******************************************************************************************
-void timer100()
-{
-  static int     count10sec = 0 ;                 // Counter for activatie 10 seconds process
-  static int     oldval2 = HIGH ;                 // Previous value of digital input button 2
-#if ( not ( defined ( USETFT ) ) )
-  static int     oldval1 = HIGH ;                 // Previous value of digital input button 1
-  static int     oldval3 = HIGH ;                 // Previous value of digital input button 3
-#endif
-  int            newval ;                         // New value of digital input switch
-  uint16_t       v ;                              // Analog input value 0..1023
-  static uint8_t aoldval = 0 ;                    // Previous value of analog input switch
-  uint8_t        anewval ;                        // New value of analog input switch (0..3)
-
-  if ( ++count10sec == 100  )                     // 10 seconds passed?
-  {
-    timer10sec() ;                                // Yes, do 10 second procedure
-    count10sec = 0 ;                              // Reset count
-  }
-  else
-  {
-    newval = digitalRead ( BUTTON2 ) ;            // Test if below certain level
-    if ( newval != oldval2 )                      // Change?
-    {
-      oldval2 = newval ;                          // Yes, remember value
-      if ( newval == LOW )                        // Button pushed?
-      {
-        ini_block.newpreset = currentpreset + 1 ; // Yes, goto next preset station
-        dbgprint ( "Digital button 2 pushed" ) ;
-      }
-      return ;
-    }
-#if ( not ( defined ( USETFT ) ) )
-    newval = digitalRead ( BUTTON1 ) ;            // Test if below certain level
-    if ( newval != oldval1 )                      // Change?
-    {
-      oldval1 = newval ;                          // Yes, remember value
-      if ( newval == LOW )                        // Button pushed?
-      {
-        ini_block.newpreset = 0 ;                 // Yes, goto first preset station
-        dbgprint ( "Digital button 1 pushed" ) ;
-      }
-      return ;
-    }
-    // Note that BUTTON3 has inverted input
-    newval = digitalRead ( BUTTON3 ) ;            // Test if below certain level
-    newval = HIGH + LOW - newval ;                // Reverse polarity
-    if ( newval != oldval3 )                      // Change?
-    {
-      oldval3 = newval ;                          // Yes, remember value
-      if ( newval == LOW )                        // Button pushed?
-      {
-        ini_block.newpreset = currentpreset - 1 ; // Yes, goto previous preset station
-        dbgprint ( "Digital button 3 pushed" ) ;
-      }
-      return ;
-    }
-#endif
-    v = analogRead ( A0 ) ;                       // Read analog value
-    anewval = anagetsw ( v ) ;                    // Check analog value for program switches
-    if ( anewval != aoldval )                     // Change?
-    {
-      aoldval = anewval ;                         // Remember value for change detection
-      if ( anewval != 0 )                         // Button pushed?
-      {
-        dbgprint ( "Analog button %d pushed, v = %d", anewval, v ) ;
-        if ( anewval == 1 )                       // Button 1?
-        {
-          ini_block.newpreset = 0 ;               // Yes, goto first preset
-        }
-        else if ( anewval == 2 )                  // Button 2?
-        {
-          ini_block.newpreset = currentpreset + 1 ; // Yes, goto next preset
-        }
-        else if ( anewval == 3 )                  // Button 3?
-        {
-          ini_block.newpreset = currentpreset - 1 ; // Yes, goto previous preset
-        }
-      }
-    }
-  }
-}
-
-
-//******************************************************************************************
-//                              D I S P L A Y V O L U M E                                  *
-//******************************************************************************************
-// Show the current volume as an indicator on the screen.                                  *
-//******************************************************************************************
-void displayvolume()
-{
-#if defined ( USETFT )
-  static uint8_t oldvol = 0 ;                        // Previous volume
-  uint8_t        pos ;                               // Positon of volume indicator
-
-  if ( vs1053player.getVolume() != oldvol )
-  {
-    pos = map ( vs1053player.getVolume(), 0, 100, 0, 160 ) ;
-  }
-  tft.fillRect ( 0, 126, pos, 2, RED ) ;             // Paint red part
-  tft.fillRect ( pos, 126, 160 - pos, 2, GREEN ) ;   // Paint green part
-#endif
-}
-
-
-//******************************************************************************************
-//                              D I S P L A Y I N F O                                      *
-//******************************************************************************************
-// Show a string on the LCD at a specified y-position in a specified color                 *
-//******************************************************************************************
-void displayinfo ( const char* str, uint16_t pos, uint16_t height, uint16_t color )
-{
-#if defined ( USETFT )
-  char buf [ strlen ( str ) + 1 ] ;             // Need some buffer space
-  
-  strcpy ( buf, str ) ;                         // Make a local copy of the string
-  utf8ascii ( buf ) ;                           // Convert possible UTF8
-  tft.fillRect ( 0, pos, 160, height, BLACK ) ; // Clear the space for new info
-  tft.setTextColor ( color ) ;                  // Set the requested color
-  tft.setCursor ( 0, pos ) ;                    // Prepare to show the info
-  tft.println ( buf ) ;                         // Show the string
-#endif
-}
-
-
-//******************************************************************************************
-//                        S H O W S T R E A M T I T L E                                    *
-//******************************************************************************************
-// Show artist and songtitle if present in metadata.                                       *
-// Show always if full=true.                                                               *
-//******************************************************************************************
-void showstreamtitle ( const char *ml, bool full )
-{
-  char*             p1 ;
-  char*             p2 ;
-  char              streamtitle[150] ;           // Streamtitle from metadata
-
-  if ( strstr ( ml, "StreamTitle=" ) )
-  {
-    dbgprint ( "Streamtitle found, %d bytes", strlen ( ml ) ) ;
-    dbgprint ( ml ) ;
-    p1 = (char*)ml + 12 ;                       // Begin of artist and title
-    if ( ( p2 = strstr ( ml, ";" ) ) )          // Search for end of title
-    {
-      if ( *p1 == '\'' )                        // Surrounded by quotes?
-      {
-        p1++ ;
-        p2-- ;
-      }
-      *p2 = '\0' ;                              // Strip the rest of the line
-    }
-    // Save last part of string as streamtitle.  Protect against buffer overflow
-    strncpy ( streamtitle, p1, sizeof ( streamtitle ) ) ;
-    streamtitle[sizeof ( streamtitle ) - 1] = '\0' ;
-  }
-  else if ( full )
-  {
-    // Info probably from playlist
-    strncpy ( streamtitle, ml, sizeof ( streamtitle ) ) ;
-    streamtitle[sizeof ( streamtitle ) - 1] = '\0' ;
-  }
-  else
-  {
-    icystreamtitle = "" ;                       // Unknown type
-    return ;                                    // Do not show
-  }
-  // Save for status request from browser ;
-  icystreamtitle = streamtitle ;
-  if ( ( p1 = strstr ( streamtitle, " - " ) ) ) // look for artist/title separator
-  {
-    *p1++ = '\n' ;                              // Found: replace 3 characters by newline
-    p2 = p1 + 2 ;
-    if ( *p2 == ' ' )                           // Leading space in title?
-    {
-      p2++ ;
-    }
-    strcpy ( p1, p2 ) ;                         // Shift 2nd part of title 2 or 3 places
-  }
-  displayinfo ( streamtitle, 20, 40, CYAN ) ;   // Show title at position 20
-}
-
-
-//******************************************************************************************
 //                            S T O P _ M P 3 C L I E N T                                  *
 //******************************************************************************************
 // Disconnect from the server.                                                             *
@@ -1302,7 +1077,7 @@ bool connecttohost()
 
   stop_mp3client() ;                                // Disconnect if still connected
   dbgprint ( "Connect to new host %s", host.c_str() ) ;
-  displayinfo ( "   ** Internet radio **", 0, 20, WHITE ) ;
+  //displayinfo ( "   ** Internet radio **", 0, 20, WHITE ) ;
   datamode = INIT ;                                 // Start default in metamode
   chunked = false ;                                 // Assume not chunked
   if ( host.endsWith ( ".m3u" ) )                   // Is it an m3u playlist?
@@ -1331,7 +1106,6 @@ bool connecttohost()
   }
   pfs = dbgprint ( "Connect to %s on port %d, extension %s",
                    hostwoext.c_str(), port, extension.c_str() ) ;
-  displayinfo ( pfs, 60, 66, YELLOW ) ;             // Show info at position 60..125
   mp3client = new WiFiClient() ;
   if ( mp3client->connect ( hostwoext.c_str(), port ) )
   {
@@ -1362,7 +1136,7 @@ bool connecttofile()
   String path ;                                           // Full file spec
   char*  p ;                                              // Pointer to filename
 
-  displayinfo ( "   **** MP3 Player ****", 0, 20, WHITE ) ;
+  //displayinfo ( "   **** MP3 Player ****", 0, 20, WHITE ) ;
   path = host.substring ( 9 ) ;                           // Path, skip the "localhost" part
   mp3file = SPIFFS.open ( path, "r" ) ;                   // Open the file
   if ( !mp3file )
@@ -1371,9 +1145,7 @@ bool connecttofile()
     return false ;
   }
   p = (char*)path.c_str() + 1 ;                           // Point to filename
-  showstreamtitle ( p, true ) ;                           // Show the filename as title
-  displayinfo ( "Playing from local file",
-                60, 68, YELLOW ) ;                        // Show Source at position 60
+
   icyname = "" ;                                          // No icy name yet
   chunked = false ;                                       // File not chunked
   return true ;
@@ -1497,172 +1269,6 @@ void readinifile()
     dbgprint ( "File %s not found, use save command to create one!", INIFILENAME ) ;
   }
 }
-
-
-//******************************************************************************************
-//                            P U B L I S H I P                                            *
-//******************************************************************************************
-// Publish IP to MQTT broker.                                                              *
-//******************************************************************************************
-void publishIP()
-{
-  IPAddress ip ;
-  char      ipstr[20] ;                          // Hold IP as string
-
-  if ( ini_block.mqttpubtopic.length() )        // Topic to publish?
-  {
-    ip = WiFi.localIP() ;
-    // Publish IP-adress.  qos=1, retain=true
-    sprintf ( ipstr, "%d.%d.%d.%d",
-              ip[0], ip[1], ip[2], ip[3] ) ;
-    mqttclient.publish ( ini_block.mqttpubtopic.c_str(), 1, true, ipstr ) ;
-    dbgprint ( "Publishing IP %s to topic %s",
-               ipstr, ini_block.mqttpubtopic.c_str() ) ;
-  }
-}
-
-
-//******************************************************************************************
-//                            O N M Q T T C O N N E C T                                    *
-//******************************************************************************************
-// Will be called on connection to the broker.  Subscribe to our topic and publish a topic.*
-//******************************************************************************************
-void onMqttConnect( bool sessionPresent )
-{
-  uint16_t    packetIdSub ;
-  const char* present = "is" ;                      // Assume Session is present
-
-  if ( !sessionPresent )
-  {
-    present = "is not" ;                            // Session is NOT present
-  }
-  dbgprint ( "MQTT Connected to the broker %s, session %s present",
-             ini_block.mqttbroker.c_str(), present ) ;
-  packetIdSub = mqttclient.subscribe ( ini_block.mqtttopic.c_str(), 2 ) ;
-  dbgprint ( "Subscribing to %s at QoS 2, packetId = %d ",
-             ini_block.mqtttopic.c_str(),
-             packetIdSub ) ;
-  publishIP() ;                                     // Topic to publish: IP
-}
-
-
-//******************************************************************************************
-//                      O N M Q T T D I S C O N N E C T                                    *
-//******************************************************************************************
-// Will be called on disconnect.                                                           *
-//******************************************************************************************
-void onMqttDisconnect ( AsyncMqttClientDisconnectReason reason )
-{
-  dbgprint ( "MQTT Disconnected from the broker, reason %d, reconnecting...",
-             reason ) ;
-  if ( mqttcount < MAXMQTTCONNECTS )            // Try again?
-  {
-    mqttcount++ ;                               // Yes, count number of tries
-    mqttclient.connect() ;                      // Reconnect
-  }
-}
-
-
-//******************************************************************************************
-//                      O N M Q T T S U B S C R I B E                                      *
-//******************************************************************************************
-// Will be called after a successful subscribe.                                            *
-//******************************************************************************************
-void onMqttSubscribe ( uint16_t packetId, uint8_t qos )
-{
-  dbgprint ( "MQTT Subscribe acknowledged, packetId = %d, QoS = %d",
-             packetId, qos ) ;
-}
-
-
-//******************************************************************************************
-//                              O N M Q T T U N S U B S C R I B E                          *
-//******************************************************************************************
-// Will be executed if this program unsubscribes from a topic.                             *
-// Not used at the moment.                                                                 *
-//******************************************************************************************
-void onMqttUnsubscribe ( uint16_t packetId )
-{
-  dbgprint ( "MQTT Unsubscribe acknowledged, packetId = %d",
-             packetId ) ;
-}
-
-
-//******************************************************************************************
-//                            O N M Q T T M E S S A G E                                    *
-//******************************************************************************************
-// Executed when a subscribed message is received.                                         *
-// Note that message is not delimited by a '\0'.                                           *
-//******************************************************************************************
-void onMqttMessage ( char* topic, char* payload, AsyncMqttClientMessageProperties properties,
-                     size_t len, size_t index, size_t total )
-{
-  char*  reply ;                                    // Result from analyzeCmd
-
-  // Available properties.qos, properties.dup, properties.retain
-  if ( len >= sizeof(cmd) )                         // Message may not be too long
-  {
-    len = sizeof(cmd) - 1 ;
-  }
-  strncpy ( cmd, payload, len ) ;                   // Make copy of message
-  cmd[len] = '\0' ;                                 // Take care of delimeter
-  dbgprint ( "MQTT message arrived [%s], lenght = %d, %s", topic, len, cmd ) ;
-  reply = analyzeCmd ( cmd ) ;                      // Analyze command and handle it
-  dbgprint ( reply ) ;                              // Result for debugging
-}
-
-
-//******************************************************************************************
-//                             O N M Q T T P U B L I S H                                   *
-//******************************************************************************************
-// Will be executed if a message is published by this program.                             *
-// Not used at the moment.                                                                 *
-//******************************************************************************************
-void onMqttPublish ( uint16_t packetId )
-{
-  dbgprint ( "MQTT Publish acknowledged, packetId = %d",
-             packetId ) ;
-}
-
-
-//******************************************************************************************
-//                             S C A N S E R I A L                                         *
-//******************************************************************************************
-// Listen to commands on the Serial inputline.                                             *
-//******************************************************************************************
-void scanserial()
-{
-  static String serialcmd ;                      // Command from Serial input
-  char          c ;                              // Input character
-  char*         reply ;                          // Reply string froma analyzeCmd
-  uint16_t      len ;                            // Length of input string
-
-  while ( Serial.available() )                   // Any input seen?
-  {
-    c =  (char)Serial.read() ;                   // Yes, read the next input character
-    //Serial.write ( c ) ;                       // Echo
-    len = serialcmd.length() ;                   // Get the length of the current string
-    if ( ( c == '\n' ) || ( c == '\r' ) )
-    {
-      if ( len )
-      {
-        strncpy ( cmd, serialcmd.c_str(), sizeof(cmd) ) ;
-        reply = analyzeCmd ( cmd) ;              // Analyze command and handle it
-        dbgprint ( reply ) ;                     // Result for debugging
-        serialcmd = "" ;                         // Prepare for new command
-      }
-    }
-    if ( c >= ' ' )                              // Only accept useful characters
-    {
-      serialcmd += c ;                           // Add to the command
-    }
-    if ( len >= ( sizeof(cmd) - 2 )  )           // Check for excessive length
-    {
-      serialcmd = "" ;                           // Too long, reset
-    }
-  }
-}
-
 
 //******************************************************************************************
 //                                   M K _ L S A N                                         *
@@ -1820,22 +1426,14 @@ void setup()
   pinMode ( BUTTON2, INPUT_PULLUP ) ;                  // Input for control button 2
   vs1053player.begin() ;                               // Initialize VS1053 player
 # if defined ( USETFT )
-  tft.begin() ;                                        // Init TFT interface
-  tft.fillRect ( 0, 0, 160, 128, BLACK ) ;             // Clear screen does not work when rotated
-  tft.setRotation ( 3 ) ;                              // Use landscape format
-  tft.clearScreen() ;                                  // Clear screen
-  tft.setTextSize ( 1 ) ;                              // Small character font
-  tft.setTextColor ( WHITE ) ;                         // Info in white
-  tft.println ( "Starting" ) ;
-  tft.println ( "Version:" ) ;
-  tft.println ( VERSION ) ;
+  ;
 #else
   pinMode ( BUTTON1, INPUT_PULLUP ) ;                  // Input for control button 1
   pinMode ( BUTTON3, INPUT_PULLUP ) ;                  // Input for control button 3
 #endif
   delay(10);
   analogrest = ( analogRead ( A0 ) + asw1 ) / 2  ;     // Assumed inactive analog input
-  tckr.attach ( 0.100, timer100 ) ;                    // Every 100 msec
+  //tckr.attach ( 0.100, timer100 ) ;                    // Every 100 msec
   dbgprint ( "Selected network: %-25s", ini_block.ssid.c_str() ) ;
   NetworkFound = connectwifi() ;                       // Connect to WiFi network
   //NetworkFound = false ;                             // TEST, uncomment for no network test
@@ -1854,23 +1452,6 @@ void setup()
       // Initialize the MQTT client
       WiFi.hostByName ( ini_block.mqttbroker.c_str(),
                         mqtt_server_IP ) ;             // Lookup IP of MQTT server
-      mqttclient.onConnect ( onMqttConnect ) ;
-      mqttclient.onDisconnect ( onMqttDisconnect ) ;
-      mqttclient.onSubscribe ( onMqttSubscribe ) ;
-      mqttclient.onUnsubscribe ( onMqttUnsubscribe ) ;
-      mqttclient.onMessage ( onMqttMessage ) ;
-      mqttclient.onPublish ( onMqttPublish ) ;
-      mqttclient.setServer ( mqtt_server_IP,           // Specify the broker
-                             ini_block.mqttport ) ;    // And the port
-      mqttclient.setCredentials ( ini_block.mqttuser.c_str(),
-                                  ini_block.mqttpasswd.c_str() ) ;
-      mqttclient.setClientId ( NAME ) ;
-      dbgprint ( "Connecting to MQTT %s, port %d, user %s, password %s...",
-                 ini_block.mqttbroker.c_str(),
-                 ini_block.mqttport,
-                 ini_block.mqttuser.c_str(),
-                 ini_block.mqttpasswd.c_str() ) ;
-      mqttclient.connect();
     }
   }
   else
@@ -2035,6 +1616,7 @@ String xmlparse ( String mount )
   return String ( tmpstr ) ;                           // Return final streaming URL.
 }
 
+uint8_t localBuffer[512];
 
 //******************************************************************************************
 //                                   L O O P                                               *
@@ -2074,13 +1656,15 @@ void loop()
     else
     {
       maxfilechunk = mp3client->available() ;          // Bytes available from mp3 server
-      if ( maxfilechunk > 1024 )                       // Reduce byte count for this loop()
+      if ( maxfilechunk > 512 )                       // Reduce byte count for this loop()
       {
-        maxfilechunk = 1024 ;
+        maxfilechunk = 512 ;
       }
+	  mp3client->read(localBuffer, (size_t)maxfilechunk);
+	  uint32_t localIndex = 0;
       while ( ringspace() && maxfilechunk-- )
       {
-        putring ( mp3client->read() ) ;                // Yes, store one byte in ringbuffer
+        putring ( localBuffer[localIndex++] ) ;                // Yes, store one byte in ringbuffer
         yield() ;
       }
     }
@@ -2203,14 +1787,11 @@ void loop()
   {
     vs1053player.setVolume ( ini_block.reqvol ) ;       // Unmute
   }
-  displayvolume() ;                                     // Show volume on display
   if ( testfilename.length() )                          // File to test?
   {
     testfile ( testfilename ) ;                         // Yes, do the test
     testfilename = "" ;                                 // Clear test request
   }
-  scanserial() ;                                        // Handle serial input
-  ArduinoOTA.handle() ;                                 // Check for OTA
 }
 
 
@@ -2402,8 +1983,6 @@ void handlebyte ( uint8_t b, bool force )
         {
           icyname = metaline.substring(9) ;            // Get station name
           icyname.trim() ;                             // Remove leading and trailing spaces
-          displayinfo ( icyname.c_str(), 60, 68,
-                        YELLOW ) ;                     // Show station name at position 60
         }
         else if ( lcml.startsWith ( "transfer-encoding:" ) )
         {
@@ -2460,7 +2039,7 @@ void handlebyte ( uint8_t b, bool force )
         // Sometimes it is just other info like:
         // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
         // Isolate the StreamTitle, remove leading and trailing quotes if present.
-        showstreamtitle ( metaline.c_str() ) ;         // Show artist and title if present in metadata
+        // Show artist and title if present in metadata
       }
       if ( metaline.length() > 1500 )                  // Unlikely metaline length?
       {
@@ -2534,7 +2113,7 @@ void handlebyte ( uint8_t b, bool force )
           if ( inx > 0 )
           {
             // Show artist and title if present in metadata
-            showstreamtitle ( metaline.substring ( inx + 1 ).c_str(), true ) ;
+ 
           }
         }
       }
@@ -2600,43 +2179,7 @@ String getContentType ( String filename )
 void handleFileUpload ( AsyncWebServerRequest *request, String filename,
                         size_t index, uint8_t *data, size_t len, bool final )
 {
-  String          path ;                              // Filename including "/"
-  static File     f ;                                 // File handle output file
-  char*           reply ;                             // Reply for webserver
-  static uint32_t t ;                                 // Timer for progress messages
-  uint32_t        t1 ;                                // For compare
-  static uint32_t totallength ;                       // Total file length
-  static size_t   lastindex ;                         // To test same index
 
-  if ( index == 0 )
-  {
-    path = String ( "/" ) + filename ;                // Form SPIFFS filename
-    SPIFFS.remove ( path ) ;                          // Remove old file
-    f = SPIFFS.open ( path, "w" ) ;                   // Create new file
-    t = millis() ;                                    // Start time
-    totallength = 0 ;                                 // Total file lengt still zero
-    lastindex = 0 ;                                   // Prepare test
-  }
-  t1 = millis() ;                                     // Current timestamp
-  // Yes, print progress
-  dbgprint ( "File upload %s, t = %d msec, len %d, index %d",
-               filename.c_str(), t1 - t, len, index ) ;
-  if ( len )                                          // Something to write?
-  {
-    if ( ( index != lastindex ) || ( index == 0 ) )   // New chunk?
-    {
-      f.write ( data, len ) ;                         // Yes, transfer to SPIFFS
-      totallength += len ;                            // Update stored length
-      lastindex = index ;                             // Remenber this part
-    }
-  }
-  if ( final )                                        // Was this last chunk?
-  {
-    f.close() ;                                       // Yes, clode the file
-    reply = dbgprint ( "File upload %s, %d bytes finished",
-                       filename.c_str(), totallength ) ;
-    request->send ( 200, "", reply ) ;
-  }
 }
 
 

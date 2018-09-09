@@ -1691,9 +1691,6 @@ void loop()
     vs1053player.stopSong() ;                          // Stop playing
     emptyring() ;                                      // Empty the ringbuffer
     datamode = STOPPED ;                               // Yes, state becomes STOPPED
-#if defined ( USETFT )
-    tft.fillRect ( 0, 0, 160, 128, BLACK ) ;           // Clear screen does not work when rotated
-#endif
     delay ( 500 ) ;
   }
   if ( localfile )

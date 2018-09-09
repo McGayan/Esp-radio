@@ -151,6 +151,8 @@ extern "C"
 #include "user_interface.h"
 }
 
+//Definitions
+//{
 // Definitions for 3 control switches on analog input
 // You can test the analog input values by holding down the switch and select /?analog=1
 // in the web interface. See schematics in the documentation.
@@ -196,6 +198,7 @@ extern "C"
 #define NAME "Esp-radio"
 // Maximum number of MQTT reconnects before give-up
 #define MAXMQTTCONNECTS 20
+//}
 //
 //******************************************************************************************
 // Forward declaration of various functions                                                *
@@ -251,6 +254,7 @@ enum datamode_t { INIT = 1, HEADER = 2, DATA = 4,
                 } ;        // State for datastream
 
 // Global variables
+//{
 int              DEBUG = 1 ;
 ini_struct       ini_block ;                               // Holds configurable data
 WiFiClient       *mp3client = NULL ;                       // An instance of the mp3 client
@@ -310,7 +314,7 @@ String      xmlData ;                                      // Data inside tag
 String      stationServer( "" ) ;                          // Radio stream server
 String      stationPort( "" ) ;                            // Radio stream port
 String      stationMount( "" ) ;                           // Radio stream Callsign
-
+//}
 //******************************************************************************************
 // End of global data section.                                                             *
 //******************************************************************************************
@@ -329,6 +333,7 @@ String      stationMount( "" ) ;                           // Radio stream Calls
 //******************************************************************************************
 // VS1053 class definition.                                                                *
 //******************************************************************************************
+//{
 class VS1053
 {
   private:
@@ -693,6 +698,7 @@ void VS1053::printDetails ( const char *header )
   }
 }
 
+//}
 // The object for the MP3 player
 VS1053 vs1053player (  VS1053_CS, VS1053_DCS, VS1053_DREQ ) ;
 
@@ -708,6 +714,7 @@ VS1053 vs1053player (  VS1053_CS, VS1053_DCS, VS1053_DREQ ) ;
 //******************************************************************************************
 //                              R I N G S P A C E                                          *
 //******************************************************************************************
+//{
 inline bool ringspace()
 {
   return ( rcount < RINGBFSIZ ) ;     // True is at least one byte of free space is available
@@ -762,7 +769,7 @@ void emptyring()
   rcount = 0 ;
 }
 
-
+//}
 //******************************************************************************************
 //                              U T F 8 A S C I I                                          *
 //******************************************************************************************
@@ -922,66 +929,6 @@ void listNetworks()
     networks += WiFi.SSID ( i ) + String ( "|" ) ;
   }
   dbgprint ( "--------------------------------------" ) ;
-}
-
-
-//******************************************************************************************
-//                                  T I M E R 1 0 S E C                                    *
-//******************************************************************************************
-// Extra watchdog.  Called every 10 seconds.                                               *
-// If totalcount has not been changed, there is a problem and playing will stop.           *
-// Note that a "yield()" within this routine or in called functions will cause a crash!    *
-//******************************************************************************************
-void timer10sec()
-{
-  static uint32_t oldtotalcount = 7321 ;          // Needed foor change detection
-  static uint8_t  morethanonce = 0 ;              // Counter for succesive fails
-  static uint8_t  t600 = 0 ;                      // Counter for 10 minutes
-
-  if ( datamode & ( INIT | HEADER | DATA |        // Test op playing
-                    METADATA | PLAYLISTINIT |
-                    PLAYLISTHEADER |
-                    PLAYLISTDATA ) )
-  {
-    if ( totalcount == oldtotalcount )            // Still playing?
-    {
-      dbgprint ( "No data input" ) ;              // No data detected!
-      if ( morethanonce > 10 )                    // Happened too many times?
-      {
-        dbgprint ( "Going to restart..." ) ;
-        ESP.restart() ;                           // Reset the CPU, probably no return
-      }
-      if ( datamode & ( PLAYLISTDATA |            // In playlist mode?
-                        PLAYLISTINIT |
-                        PLAYLISTHEADER ) )
-      {
-        playlist_num = 0 ;                        // Yes, end of playlist
-      }
-      if ( ( morethanonce > 0 ) ||                // Happened more than once?
-           ( playlist_num > 0 ) )                 // Or playlist active?
-      {
-        datamode = STOPREQD ;                     // Stop player
-        ini_block.newpreset++ ;                   // Yes, try next channel
-        dbgprint ( "Trying other station/file..." ) ;
-      }
-      morethanonce++ ;                            // Count the fails
-    }
-    else
-    {
-      if ( morethanonce )                         // Recovered from data loss?
-      {
-        dbgprint ( "Recovered from dataloss" ) ;
-        morethanonce = 0 ;                        // Data see, reset failcounter
-      }
-      oldtotalcount = totalcount ;                // Save for comparison in next cycle
-    }
-    if ( t600++ == 60 )                           // 10 minutes over?
-    {
-      t600 = 0 ;                                  // Yes, reset counter
-      dbgprint ( "10 minutes over" ) ;
-      publishIP() ;                               // Re-publish IP
-    }
-  }
 }
 
 
@@ -1181,17 +1128,6 @@ bool connectwifi()
   tft.println ( pfs ) ;
 #endif
   return true ;
-}
-
-
-//******************************************************************************************
-//                                   O T A S T A R T                                       *
-//******************************************************************************************
-// Update via WiFi has been started by Arduino IDE.                                        *
-//******************************************************************************************
-void otastart()
-{
-  dbgprint ( "OTA Started" ) ;
 }
 
 
@@ -1442,22 +1378,6 @@ void setup()
   cmdserver.onNotFound ( handleFS ) ;                  // Handle file from FS
   cmdserver.onFileUpload ( handleFileUpload ) ;        // Handle file uploads
   cmdserver.begin() ;
-  if ( NetworkFound )                                  // OTA and MQTT only if Wifi network found
-  {
-    ArduinoOTA.setHostname ( NAME ) ;                  // Set the hostname
-    ArduinoOTA.onStart ( otastart ) ;
-    ArduinoOTA.begin() ;                               // Allow update over the air
-    if ( ini_block.mqttbroker.length() )               // Broker specified?
-    {
-      // Initialize the MQTT client
-      WiFi.hostByName ( ini_block.mqttbroker.c_str(),
-                        mqtt_server_IP ) ;             // Lookup IP of MQTT server
-    }
-  }
-  else
-  {
-    currentpreset = ini_block.newpreset ;              // No network: do not start radio
-  }
   delay ( 1000 ) ;                                     // Show IP for a wile
   analogrest = ( analogRead ( A0 ) + asw1 ) / 2  ;     // Assumed inactive analog input
 }
@@ -1617,7 +1537,7 @@ String xmlparse ( String mount )
 }
 
 uint8_t localBuffer[512];
-
+unsigned long lastUpdateTime = 0;
 //******************************************************************************************
 //                                   L O O P                                               *
 //******************************************************************************************
@@ -1661,12 +1581,27 @@ void loop()
         maxfilechunk = 512 ;
       }
 	  mp3client->read(localBuffer, (size_t)maxfilechunk);
+	  unsigned long currentTime = micros();
+	  unsigned long diff = currentTime - lastUpdateTime;
+	  unsigned long datapointsForDiff = (unsigned long)((double)diff * 128.0 * 1024.0 ) / (1000.0*1000.0);
+	  if(maxfilechunk < datapointsForDiff)
+	  {
+		Serial.print("E: ld: ");
+		Serial.println(datapointsForDiff - maxfilechunk);
+	  }
+	  lastUpdateTime = currentTime;
 	  uint32_t localIndex = 0;
       while ( ringspace() && maxfilechunk-- )
       {
         putring ( localBuffer[localIndex++] ) ;                // Yes, store one byte in ringbuffer
         yield() ;
       }
+	  if(maxfilechunk > 0)
+	  {
+		  Serial.print("E: of");
+      Serial.println(maxfilechunk);
+	  }
+	  
     }
     yield() ;
   }
